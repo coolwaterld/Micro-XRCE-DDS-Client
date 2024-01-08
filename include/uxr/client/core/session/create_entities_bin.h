@@ -110,6 +110,16 @@ UXRDLLAPI uint16_t uxr_buffer_create_topic_bin(
         const char* type_name,
         uint8_t mode);
 
+UXRDLLAPI uint16_t uxr_buffer_create_topic_bin_key(
+        uxrSession* session,
+        uxrStreamId stream_id,
+        uxrObjectId object_id,
+        uxrObjectId participant_id,
+        const char* topic_name,
+        const char* type_name,
+        uint8_t mode,
+        bool key);
+
 /**
  * @brief Buffers into the stream identified by `stream_id` an XRCE CREATE submessage with an XRCE Subscriber payload.
  *        The submessage will be sent when `uxr_flash_output_streams` or `uxr_run_session` function are called.
@@ -128,6 +138,13 @@ UXRDLLAPI uint16_t uxr_buffer_create_publisher_bin(
         uxrObjectId object_id,
         uxrObjectId participant_id,
         uint8_t mode);
+UXRDLLAPI uint16_t uxr_buffer_create_publisher_bin_partition(
+        uxrSession* session,
+        uxrStreamId stream_id,
+        uxrObjectId object_id,
+        uxrObjectId participant_id,
+        uint8_t mode,
+        char * partition);
 
 /**
  * @brief Buffers into the stream identified by `stream_id` an XRCE CREATE submessage with an XRCE Subscriber payload.
@@ -150,6 +167,13 @@ UXRDLLAPI uint16_t uxr_buffer_create_subscriber_bin(
         uxrObjectId object_id,
         uxrObjectId participant_id,
         uint8_t mode);
+UXRDLLAPI uint16_t uxr_buffer_create_subscriber_bin_partition(
+        uxrSession* session,
+        uxrStreamId stream_id,
+        uxrObjectId object_id,
+        uxrObjectId participant_id,
+        uint8_t mode,
+        char * partition);
 
 /**
  * @brief Buffers into the stream identified by `stream_id` an XRCE CREATE submessage with an XRCE DataWriter payload.

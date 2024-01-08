@@ -18,6 +18,7 @@
 #include <stdio.h> //printf
 #include <string.h> //strcmp
 #include <stdlib.h> //atoi
+#include "agv.h"
 
 #define STREAM_HISTORY  8
 #define BUFFER_SIZE     UXR_CONFIG_UDP_TRANSPORT_MTU* STREAM_HISTORY
@@ -33,10 +34,10 @@ void on_topic(
 {
     (void) session; (void) object_id; (void) request_id; (void) stream_id; (void) length; (void) args;
 
-    int32_t data;
-    ucdr_deserialize_int32_t(ub, &data);
+    Distance topic;
+    Distance_deserialize_topic(ub, &topic);
 
-    printf("Received topic: %i\n", data);
+    printf("Received angle:%d,distance:%f \n",topic.angle,topic.distance);
 }
 
 int main(
@@ -87,24 +88,24 @@ int main(
             uxr_buffer_create_participant_bin(&session, reliable_out, participant_id, 0, NULL, UXR_REPLACE);
 
     uxrObjectId topic_id = uxr_object_id(0x01, UXR_TOPIC_ID);
-    uint16_t topic_req = uxr_buffer_create_topic_bin(&session, reliable_out, topic_id, participant_id, "ExampleTopic",
-                    "ExampleType", UXR_REPLACE);
+    uint16_t topic_req_distance = uxr_buffer_create_topic_bin_key(&session, reliable_out, topic_id, participant_id, "TagValue_Distance",
+                    "Distance", UXR_REPLACE,true);
 
     uxrObjectId publisher_id = uxr_object_id(0x01, UXR_PUBLISHER_ID);
-    uint16_t publisher_req = uxr_buffer_create_publisher_bin(&session, reliable_out, publisher_id, participant_id,
-                    UXR_REPLACE);
-
+    uint16_t publisher_req = uxr_buffer_create_publisher_bin_partition(&session, reliable_out, publisher_id, participant_id,
+                    UXR_REPLACE,"AGV1");
+    //UXR_DURABILITY_TRANSIENT_LOCAL //by ld
     uxrObjectId datawriter_id = uxr_object_id(0x01, UXR_DATAWRITER_ID);
     uxrQoS_t qos = {
-        .reliability = UXR_RELIABILITY_RELIABLE, .durability = UXR_DURABILITY_TRANSIENT_LOCAL,
+        .reliability = UXR_RELIABILITY_RELIABLE, .durability = UXR_DURABILITY_VOLATILE,
         .history = UXR_HISTORY_KEEP_LAST, .depth = 0
     };
     uint16_t datawriter_req = uxr_buffer_create_datawriter_bin(&session, reliable_out, datawriter_id, publisher_id,
                     topic_id, qos, UXR_REPLACE);
 
     uxrObjectId subscriber_id = uxr_object_id(0x01, UXR_SUBSCRIBER_ID);
-    uint16_t subscriber_req = uxr_buffer_create_subscriber_bin(&session, reliable_out, subscriber_id, participant_id,
-                    UXR_REPLACE);
+    uint16_t subscriber_req = uxr_buffer_create_subscriber_bin_partition(&session, reliable_out, subscriber_id, participant_id,
+                    UXR_REPLACE,"AGV1");
 
     uxrObjectId datareader_id = uxr_object_id(0x01, UXR_DATAREADER_ID);
     uint16_t datareader_req = uxr_buffer_create_datareader_bin(&session, reliable_out, datareader_id, subscriber_id,
@@ -112,7 +113,7 @@ int main(
 
     // Send create entities message and wait its status
     uint16_t requests[] = {
-        participant_req, topic_req, publisher_req, datawriter_req, subscriber_req, datareader_req
+        participant_req,topic_req_distance ,  publisher_req, datawriter_req, subscriber_req, datareader_req
     };
     uint8_t status[sizeof(requests) / 2];
     if (!uxr_run_session_until_all_status(&session, 1000, requests, status, sizeof(status)))
@@ -135,11 +136,11 @@ int main(
     while (connected && count < max_topics)
     {
         ucdrBuffer ub;
-        uxr_prepare_output_stream(&session, reliable_out, datawriter_id, &ub, 4);
-        ucdr_serialize_int32_t(&ub, count);
-        printf("Send topic: %i\n", count);
-        count++;
-
+        // distance
+        Distance topic = {"distance","AGV1",1,{1,2},20,30.2};
+        uint32_t topic_size = Distance_size_of_topic(&topic, 0);
+        uxr_prepare_output_stream(&session, reliable_out, datawriter_id, &ub, topic_size);
+        Distance_serialize_topic(&ub, &topic);
         connected = uxr_run_session_time(&session, 1000);
     }
 
