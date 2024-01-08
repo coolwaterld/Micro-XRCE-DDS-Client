@@ -95,7 +95,7 @@ void on_topic(
     }
 
 ```
-modified:   include/uxr/client/core/session/create_entities_bin.h
+modified:   src/c/core/session/create_entities_bin.c 
 ```cpp
 uint16_t uxr_buffer_create_topic_bin_key(
         uxrSession* session,
@@ -206,7 +206,7 @@ uint16_t uxr_buffer_create_subscriber_bin_partition(
     return uxr_common_create_entity(session, stream_id, object_id, (uint16_t) ub.offset, mode, &payload);
 }
 ```
-modified:   src/c/core/session/create_entities_bin.c
+modified:   include/uxr/client/core/session/create_entities_bin.h
 ```
 UXRDLLAPI uint16_t uxr_buffer_create_topic_bin_key(
         uxrSession* session,
