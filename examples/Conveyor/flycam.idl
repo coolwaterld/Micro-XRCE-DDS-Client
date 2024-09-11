@@ -1,0 +1,8 @@
+
+struct UPDATE{
+    int32 id;
+};
+
+struct CAM{
+    int32 id;
+};

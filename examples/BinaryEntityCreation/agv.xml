@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="file:////home/coolwaterld/rti_connext_dds-6.1.2/bin/../resource/app/app_support/rtiddsgen/schema/rti_dds_profiles.xsd">
+<types>
+<struct name= "OIE_Time">
+  <member name="sec" type="int32"/>
+  <member name="nanosec" type="uint32"/>
+</struct>
+<struct name= "Distance">
+  <member name="publicName" stringMaxLength="255" type="string" key="true"/>
+  <member name="system" stringMaxLength="255" type="string" key="true"/>
+  <member name="quality" type="uint32"/>
+  <member name="timeStamp" type="nonBasic"  nonBasicTypeName= "OIE_Time"/>
+  <member name="angle" type="int32"/>
+  <member name="distance" type="float64"/>
+</struct>
+<struct name= "TrackSpeed">
+  <member name="publicName" stringMaxLength="255" type="string" key="true"/>
+  <member name="system" stringMaxLength="255" type="string" key="true"/>
+  <member name="quality" type="uint32"/>
+  <member name="timeStamp" type="nonBasic"  nonBasicTypeName= "OIE_Time"/>
+  <member name="speedPercent" type="float64"/>
+</struct>
+</types>
+</dds>
