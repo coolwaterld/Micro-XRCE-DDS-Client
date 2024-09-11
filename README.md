@@ -10,6 +10,236 @@
 
 [![Docker Build Status](https://img.shields.io/docker/cloud/build/eprosima/micro-xrce-dds-client)](https://hub.docker.com/r/eprosima/micro-xrce-dds-client/)
 
+work with https://github.com/coolwaterld/Micro-XRCE-DDS-Agent
+
+## Quick Start
+
+mkdir build
+
+cd build
+
+cmake .. -DUCLIENT_BUILD_EXAMPLES=ON
+
+make
+
+cd examples/BinaryEntityCreation/
+
+./BinaryEntityCreation 127.0.0.1 2018
+
+## What Changed
+
+modified:   examples/BinaryEntityCreation/CMakeLists.txt
+```cmake
+    add_executable(${PROJECT_NAME} main.c agv.c)
+```
+modified:   examples/BinaryEntityCreation/main.c
+```cpp
+#include "agv.h"
+
+void on_topic(
+        uxrSession* session,
+        uxrObjectId object_id,
+        uint16_t request_id,
+        uxrStreamId stream_id,
+        struct ucdrBuffer* ub,
+        uint16_t length,
+        void* args)
+{
+    (void) session; (void) object_id; (void) request_id; (void) stream_id; (void) length; (void) args;
+
+    Distance topic;
+    Distance_deserialize_topic(ub, &topic);
+
+    printf("Received angle:%d,distance:%f \n",topic.angle,topic.distance);
+}
+
+
+    uxrObjectId topic_id = uxr_object_id(0x01, UXR_TOPIC_ID);
+    uint16_t topic_req_distance = uxr_buffer_create_topic_bin_key(&session, reliable_out, topic_id, participant_id, "TagValue_Distance",
+                    "Distance", UXR_REPLACE,true);
+
+    uxrObjectId publisher_id = uxr_object_id(0x01, UXR_PUBLISHER_ID);
+    uint16_t publisher_req = uxr_buffer_create_publisher_bin_partition(&session, reliable_out, publisher_id, participant_id,
+                    UXR_REPLACE,"AGV1");
+    //UXR_DURABILITY_TRANSIENT_LOCAL //by ld
+    uxrObjectId datawriter_id = uxr_object_id(0x01, UXR_DATAWRITER_ID);
+    uxrQoS_t qos = {
+        .reliability = UXR_RELIABILITY_RELIABLE, .durability = UXR_DURABILITY_VOLATILE,
+        .history = UXR_HISTORY_KEEP_LAST, .depth = 0
+    };
+    uint16_t datawriter_req = uxr_buffer_create_datawriter_bin(&session, reliable_out, datawriter_id, publisher_id,
+                    topic_id, qos, UXR_REPLACE);
+
+    uxrObjectId subscriber_id = uxr_object_id(0x01, UXR_SUBSCRIBER_ID);
+    uint16_t subscriber_req = uxr_buffer_create_subscriber_bin_partition(&session, reliable_out, subscriber_id, participant_id,
+                    UXR_REPLACE,"AGV1");
+
+    uxrObjectId datareader_id = uxr_object_id(0x01, UXR_DATAREADER_ID);
+    uint16_t datareader_req = uxr_buffer_create_datareader_bin(&session, reliable_out, datareader_id, subscriber_id,
+                    topic_id, qos, UXR_REPLACE);
+
+    // Send create entities message and wait its status
+    uint16_t requests[] = {
+        participant_req,topic_req_distance ,  publisher_req, datawriter_req, subscriber_req, datareader_req
+    };
+
+    while (connected && count < max_topics)
+    {
+        ucdrBuffer ub;
+        // distance
+        Distance topic = {"distance","AGV1",1,{1,2},20,30.2};
+        uint32_t topic_size = Distance_size_of_topic(&topic, 0);
+        uxr_prepare_output_stream(&session, reliable_out, datawriter_id, &ub, topic_size);
+        Distance_serialize_topic(&ub, &topic);
+        connected = uxr_run_session_time(&session, 1000);
+    }
+
+```
+modified:   src/c/core/session/create_entities_bin.c 
+```cpp
+uint16_t uxr_buffer_create_topic_bin_key(
+        uxrSession* session,
+        uxrStreamId stream_id,
+        uxrObjectId object_id,
+        uxrObjectId participant_id,
+        const char* topic_name,
+        const char* type_name,
+        uint8_t mode,
+        bool with_key)
+{
+    CREATE_Payload payload;
+    payload.object_representation.kind = DDS_XRCE_OBJK_TOPIC;
+    uxr_object_id_to_raw(participant_id, payload.object_representation._.topic.participant_id.data);
+    payload.object_representation._.topic.base.representation.format = DDS_XRCE_REPRESENTATION_IN_BINARY;
+
+    OBJK_Topic_Binary topic;
+    topic.topic_name = (char*) topic_name;
+    topic.optional_type_name = true;
+    topic.type_name = (char*) type_name;
+    topic.optional_type_reference = true;
+    if(with_key)      
+        topic.type_reference = "WITH_KEY";
+    else
+        topic.type_reference = "NO_KEY";
+       
+
+    ucdrBuffer ub;
+    ucdr_init_buffer(&ub, payload.object_representation._.topic.base.representation._.binary_representation.data,
+            UXR_BINARY_SEQUENCE_MAX);
+    uxr_serialize_OBJK_Topic_Binary(&ub, &topic);
+    payload.object_representation._.topic.base.representation._.binary_representation.size = (uint32_t) ub.offset;
+
+    UXR_ADD_SHARED_MEMORY_ENTITY_BIN(session, object_id, &topic);
+
+    return uxr_common_create_entity(session, stream_id, object_id, (uint16_t) ub.offset, mode, &payload);
+}
+
+
+uint16_t uxr_buffer_create_publisher_bin_partition(
+        uxrSession* session,
+        uxrStreamId stream_id,
+        uxrObjectId object_id,
+        uxrObjectId participant_id,
+        uint8_t mode,
+        char*  partition)
+{
+    CREATE_Payload payload;
+    payload.object_representation.kind = DDS_XRCE_OBJK_PUBLISHER;
+    uxr_object_id_to_raw(participant_id, payload.object_representation._.publisher.participant_id.data);
+    payload.object_representation._.publisher.base.representation.format = DDS_XRCE_REPRESENTATION_IN_BINARY;
+
+    OBJK_Publisher_Binary publisher;
+    publisher.optional_publisher_name = false;
+    publisher.optional_qos = false;
+    //lidong
+    publisher.optional_qos = true;
+    OBJK_Publisher_Binary_Qos pqos;
+    StringSequence_t ss = {1,{partition}};
+    pqos.optional_partitions = true;
+    pqos.partitions = ss;
+    BinarySequence_t bs = {0,NULL};
+    pqos.optional_group_data = true;
+    pqos.group_data = bs;
+    publisher.qos = pqos;
+    //lidong
+    ucdrBuffer ub;
+    ucdr_init_buffer(&ub, payload.object_representation._.publisher.base.representation._.binary_representation.data,
+            UXR_BINARY_SEQUENCE_MAX);
+    uxr_serialize_OBJK_Publisher_Binary(&ub, &publisher);
+    payload.object_representation._.publisher.base.representation._.binary_representation.size = (uint32_t) ub.offset;
+
+    return uxr_common_create_entity(session, stream_id, object_id, (uint16_t) ub.offset, mode, &payload);
+}
+uint16_t uxr_buffer_create_subscriber_bin_partition(
+        uxrSession* session,
+        uxrStreamId stream_id,
+        uxrObjectId object_id,
+        uxrObjectId participant_id,
+        uint8_t mode,
+        char * partition)
+{
+    CREATE_Payload payload;
+    payload.object_representation.kind = UXR_SUBSCRIBER_ID;
+    uxr_object_id_to_raw(participant_id, payload.object_representation._.subscriber.participant_id.data);
+    payload.object_representation._.subscriber.base.representation.format = DDS_XRCE_REPRESENTATION_IN_BINARY;
+
+    OBJK_Subscriber_Binary subscriber;
+    subscriber.optional_subscriber_name = false;
+    subscriber.optional_qos = false;
+    //by lidong
+    subscriber.optional_qos = true;
+    OBJK_Subscriber_Binary_Qos sqos;
+    StringSequence_t ss = {1,{partition}};
+    sqos.optional_partitions = true;
+    sqos.partitions = ss;
+    BinarySequence_t bs = {0,NULL};
+    sqos.optional_group_data = true;
+    sqos.group_data = bs;
+    subscriber.qos = sqos;
+    //by lidong
+    ucdrBuffer ub;
+    ucdr_init_buffer(&ub, payload.object_representation._.subscriber.base.representation._.binary_representation.data,
+            UXR_BINARY_SEQUENCE_MAX);
+    uxr_serialize_OBJK_Subscriber_Binary(&ub, &subscriber);
+    payload.object_representation._.subscriber.base.representation._.binary_representation.size = (uint32_t) ub.offset;
+
+    return uxr_common_create_entity(session, stream_id, object_id, (uint16_t) ub.offset, mode, &payload);
+}
+```
+modified:   include/uxr/client/core/session/create_entities_bin.h
+```
+UXRDLLAPI uint16_t uxr_buffer_create_topic_bin_key(
+        uxrSession* session,
+        uxrStreamId stream_id,
+        uxrObjectId object_id,
+        uxrObjectId participant_id,
+        const char* topic_name,
+        const char* type_name,
+        uint8_t mode,
+        bool key);
+UXRDLLAPI uint16_t uxr_buffer_create_publisher_bin_partition(
+        uxrSession* session,
+        uxrStreamId stream_id,
+        uxrObjectId object_id,
+        uxrObjectId participant_id,
+        uint8_t mode,
+        char * partition);
+UXRDLLAPI uint16_t uxr_buffer_create_subscriber_bin_partition(
+        uxrSession* session,
+        uxrStreamId stream_id,
+        uxrObjectId object_id,
+        uxrObjectId participant_id,
+        uint8_t mode,
+        char * partition);
+```
+With examples/BinaryEntityCreation/agv.idl Using Micro-XRCE-DDS-Gen to generate 
+
+ - examples/BinaryEntityCreation/agv.c
+ - examples/BinaryEntityCreation/agv.h
+
+
+
+
 <a href="http://www.eprosima.com"><img src="https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcSd0PDlVz1U_7MgdTe0FRIWD0Jc9_YH-gGi0ZpLkr-qgCI6ZEoJZ5GBqQ" align="left" hspace="8" vspace="2" width="100" height="100" ></a>
 
 *eProsima Micro XRCE-DDS* is a library implementing the [DDS-XRCE protocol](https://www.omg.org/spec/DDS-XRCE/About-DDS-XRCE/) as defined and maintained by the OMG, whose aim is to allow resource constrained devices such as microcontrollers to communicate with the [DDS](https://www.omg.org/spec/DDS/About-DDS/>) world as any other DDS actor would do.
